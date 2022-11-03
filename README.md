@@ -5,7 +5,7 @@
 Программа эмулирует управление лабораторным прибором, состоящим из насоса и 2-х датчиков давления.
 
 
-              ![screenshot-setpressure-and-status](01.png)
+![screenshot-setpressure-and-status](01.png)
 
 
 ## Прибор
