@@ -1,18 +1,19 @@
-#define EXIT_THREAD '5'
-#define SHOW_STATUS '1'
-#define SET_PUMPSPEED '2'
-#define SET_PRESSURE '3'
-#define SET_PERIOD '4'
-
 #include "TaskController.hpp"
 #include <iostream>
 #include <chrono>
+#include <mutex>
+
+std::mutex m;
+std::mutex g_lockprint;
+std::mutex g_lock;
+std::condition_variable cv;
+bool g_done;
 
 
-std::vector<std::string> splitInput(std::string input) {
+Args splitInput(std::string input) {
     size_t pos = 0;
     std::string token;
-    std::vector<std::string> commands;
+    Args commands;
     char delimiter = ' ';
     while ((pos = input.find(delimiter)) != std::string::npos) {
         token = input.substr(0, pos);
@@ -24,6 +25,35 @@ std::vector<std::string> splitInput(std::string input) {
     }
     return commands;
 }
+
+
+Args TaskController::analyze(std::string answer) {
+    int cmd;
+    Args command = splitInput(answer);
+    if (command[0].empty()) {
+        command[0] = ERROR_FLAG;
+    } else {
+        cmd = std::stoi(command[0]);
+
+        if (cmd == 2 || cmd == 4) {
+            if (command.size() < 2 || command[1].empty())
+                command[0] = ERROR_FLAG;
+        }
+        else if (cmd == 3) {
+            if (command.size() < 3 || command[1].empty() || command[2].empty())
+                command[0] = ERROR_FLAG;
+            else if (std::stoi(command[1]) != 1 && std::stoi(command[1]) != 2) {
+                std::cout << "\nPRESSURE INPUT FAIL: wrong sensor name. Type ___1___ or ___2___" << std::endl;
+                command[0] = ERROR_FLAG;
+            }
+        }
+        else if (cmd != 1 && cmd != 5) {
+            command[0] = ERROR_FLAG;
+        }
+    }
+    return command;
+}
+
 
 void TaskController::setPeriod(unsigned int uPeriod) {
     _period = uPeriod;
@@ -42,7 +72,7 @@ void TaskController::showStatus() {
 }
 
 TaskController::~TaskController() {
-    shutdown();
+    Shutdown();
 }
 
 void TaskController::Start() {
@@ -57,20 +87,21 @@ void TaskController::Start() {
     _commandThread = std::thread(&TaskController::run, this);
 }
 
-void TaskController::QueueCommand(std::string input) {
+void TaskController::QueueCommand(Args input) {
+    
     if (!_running) {
         std::cout << "\nWARNING: System is shut down. Type 'r' to restart\n";
         return;
     }
     //std::cout << "Queuing command\n";
     _commandQueue.push_back(input);
+    
 }
 
 void TaskController::run() {
     //starting thread
     _running = true;
     while (_running) {
-        //parse string here??
 
         if (_commandQueue.size() == 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(_period));
@@ -78,10 +109,9 @@ void TaskController::run() {
             continue;
         }
 
-        std::string test = _commandQueue.front();
-        auto cmds = splitInput(test);
+        auto cmds = _commandQueue.front();
 
-        if (cmds[0][0] != '6' || cmds[0][0] != '5')
+        if (cmds[0][0] != SET_PERIOD && cmds[0][0] != EXIT_THREAD && cmds[0][0] != SHOW_STATUS)
             std::this_thread::sleep_for(std::chrono::milliseconds(_period)); //sleep for 2 sec
 
         executeCommand(cmds[0][0], cmds);
@@ -90,47 +120,34 @@ void TaskController::run() {
     //shutting down thread
 }
 
-void TaskController::executeCommand(Command command, std::vector<std::string> args) {
+void TaskController::executeCommand(Command command, Args args) {
     switch (command) {
-    case EXIT_THREAD:
-        shutdown();
-        break;
     case SHOW_STATUS:
         showStatus();
         break;
-    case SET_PUMPSPEED:
+    case SET_PUMPSPEED: {
         userSpeed speed;
-        if (args.size() < 2) {
-            std::cout << "SPEED INPUT FAIL: wrong command.\nType:   " << SET_PUMPSPEED << " <_speed: any real number_>" << std::endl;
-        }
         speed = std::stod(args[1]);
         _pump.setSpeed(speed);
+    }
         break;
-    case SET_PRESSURE:
-        if (args.size() >= 3) {
-            char name = args[1][0];
-            userPressure pressure = stod(args[2]);
-            if (name == '1') 
-                _sensor1.setPressure(pressure);
-            else if (name == '2')
-                _sensor2.setPressure(pressure);
-            else
-                std::cout << "\nPRESSURE INPUT FAIL: wrong sensor name. Type ___1___ or ___2___" << std::endl;
-        } else {
-            std::cout << "\nPRESSURE INPUT FAIL: wrong command. Type:   " << SET_PRESSURE << " <_sensor: 1 or 2_> <_pressure: any real number_>" << std::endl;
-        }
+    case SET_PRESSURE: {
+        userPressure pressure = std::stod(args[2]);
+        if (args[1][0] == '1')
+            _sensor1.setPressure(pressure);
+        else if (args[1][0] == '2')
+            _sensor2.setPressure(pressure);
+    }
         break;
-    case SET_PERIOD:
-        if (args.size() < 2) {
-            std::cout << "PERIOD INPUT FAIL: wrong command. Type <" << SET_PERIOD << " <period: any integer number>" << std::endl;
-        }
+    case SET_PERIOD: {
         unsigned int period = std::stoul(args[1]);
         setPeriod(period);
+    }
         break;
     }
 }
 
-void TaskController::shutdown() {
+void TaskController::Shutdown() {
     if (_commandThread.joinable()) {
         _running = false;
         _commandThread.join();

@@ -6,8 +6,8 @@
 
 
 template <typename T>
-T randomNoise(T value) {
-    T percVal = value * 0.01;
+T randomNoise(void) {
+    T percVal = 0.01;
     std::default_random_engine generator(std::chrono::system_clock::now().time_since_epoch().count());
     std::uniform_real_distribution<T> distribution(-percVal, percVal);
     return distribution(generator);
@@ -24,7 +24,7 @@ void PumpController::setSpeed(userSpeed uSpeed) {
 }
 
 userSpeed PumpController::getSpeed() {
-    return _speed + randomNoise<userSpeed>(_speed);
+    return _speed + randomNoise<userSpeed>();
 }
 
 std::string PumpController::getState() {
@@ -36,5 +36,5 @@ void Sensors::setPressure(userPressure uPressure) {
 }
 
 userPressure Sensors::getPressure() {
-    return _pressure + randomNoise<userPressure>(_pressure);
+    return _pressure + randomNoise<userPressure>();
 }
