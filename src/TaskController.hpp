@@ -12,6 +12,7 @@
 #include <thread>
 #include <deque>
 #include <vector>
+#include <mutex>
 
 using Command = char;
 using Args = std::vector<std::string>;
@@ -25,6 +26,9 @@ public:
     void QueueCommand(Args);
     void Shutdown();
     Args analyze(std::string);
+
+    std::condition_variable cv;
+    bool _canWait{ true };
 private:
     void run();
     void executeCommand(Command, Args args = {});
@@ -33,6 +37,7 @@ private:
 private:
     std::thread _commandThread;
     std::deque<Args> _commandQueue{};
+    std::mutex m;
     bool _running{ false };
     unsigned int _period{ 5000 };
     PumpController _pump{};

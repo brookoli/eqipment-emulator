@@ -24,7 +24,10 @@ void PumpController::setSpeed(userSpeed uSpeed) {
 }
 
 userSpeed PumpController::getSpeed() {
-    return _speed + randomNoise<userSpeed>();
+    userSpeed value = _speed;
+    if (_state == "SPEED")
+        value = _speed + randomNoise<userSpeed>();
+    return value;
 }
 
 std::string PumpController::getState() {

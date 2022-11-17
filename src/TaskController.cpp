@@ -1,13 +1,6 @@
 #include "TaskController.hpp"
 #include <iostream>
 #include <chrono>
-#include <mutex>
-
-std::mutex m;
-std::mutex g_lockprint;
-std::mutex g_lock;
-std::condition_variable cv;
-bool g_done;
 
 
 Args splitInput(std::string input) {
@@ -94,7 +87,9 @@ void TaskController::QueueCommand(Args input) {
         return;
     }
     //std::cout << "Queuing command\n";
+    m.lock();
     _commandQueue.push_back(input);
+    m.unlock();
     
 }
 
@@ -103,19 +98,22 @@ void TaskController::run() {
     _running = true;
     while (_running) {
 
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait_until(ul, std::chrono::steady_clock::now() + std::chrono::milliseconds(_period), [this]() {return _canWait = false; });
         if (_commandQueue.size() == 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(_period));
             executeCommand(SHOW_STATUS); //print status here
-            continue;
         }
+        else {
+            
+            auto cmds = _commandQueue.front();
 
-        auto cmds = _commandQueue.front();
-
-        if (cmds[0][0] != SET_PERIOD && cmds[0][0] != EXIT_THREAD && cmds[0][0] != SHOW_STATUS)
-            std::this_thread::sleep_for(std::chrono::milliseconds(_period)); //sleep for 2 sec
-
-        executeCommand(cmds[0][0], cmds);
-        _commandQueue.pop_front();
+            /*if (cmds[0][0] != SET_PERIOD && cmds[0][0] != EXIT_THREAD && cmds[0][0] != SHOW_STATUS)
+                std::this_thread::sleep_for(std::chrono::milliseconds(_period));
+*/
+            executeCommand(cmds[0][0], cmds);
+            _commandQueue.pop_front();
+            
+        }
     }
     //shutting down thread
 }

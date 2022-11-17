@@ -5,24 +5,6 @@
 #include <string>
 
 
-/*
-1. Самый существенный - нет синхронизации доступа к очереди команд.
-Контейнеры std::vector и std::deque сами по себе не являются потокобезопасными.
-Их нужно защищать с помощью мьютекса, или семафора, или критической секции, или spin-lock.
-Другой вариант - использовать нестандартный класс конкурентной очереди.
-
-4. Для завершения программы или изменения периода текущий период не прерывается.
-Функция std::this_thread::sleep_for не является прерываемой, ее следует заменить.
-Варианты:
-а) простой – цикл с проверкой флага выхода, прошедшего времени и с меньшим шагом по времени для sleep_for (аналог spin-lock).
-б) хороший - std::condition_variable
-
-5. Случайный шум должен добавляться вне зависимости от того, выполняется вывод состояния в консоль или нет.
-Значения, созданные эмулятором, должны сохраняться до конца следующего периода.
-Таким образом сколько бы раз ни была вызвана печать состояния, до конца периода оно не изменится.
-*/
-
-
 void menu() {
     std::cout << SHOW_STATUS << " - Show system's status" << std::endl;
     std::cout << SET_PUMPSPEED << " - Set pump speed - type '" << SET_PUMPSPEED << " [speed value: any real]'" << std::endl;
@@ -67,12 +49,13 @@ struct App {
             cmds = _taskController.analyze(inputCmd);
 
             switch (cmds[0][0]) {
-            case 'r':
-                // restart the system
-                _taskController.Start();
+            case SET_PERIOD:
+                _taskController._canWait = false;
+                _taskController.QueueCommand(cmds);
                 break;
             case EXIT_THREAD:
                 _running = false;
+                _taskController._canWait = false;
                 break;
             case ERROR_FLAG:
                 std::cout << "\nERROR: Wrong input\n" << std::endl;
@@ -80,6 +63,7 @@ struct App {
             default:
                 _taskController.QueueCommand(cmds);
             }
+            _taskController.cv.notify_all();
         }
         std::cout << "\nSYSTEM INFO: Preparing to close...\n\n";
         _taskController.Shutdown();
